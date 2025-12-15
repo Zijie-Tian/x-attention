@@ -325,14 +325,22 @@ def flat_group_gemm(query_states, key_states, chunk_start, chunk_end):
 def flat_group_gemm_fuse_reshape(query_states, key_states, stride, chunk_start, chunk_end, is_causal=True):
     batch_size, num_heads, q_len, head_dim = query_states.shape
     kv_len = key_states.shape[2]
-    
+
     assert (key_states.shape[0] == batch_size)
     assert (key_states.shape[1] == num_heads)
     assert (key_states.shape[3] == head_dim)
 
     output = torch.empty((batch_size, num_heads, q_len // stride, kv_len // stride), dtype=query_states.dtype, device=query_states.device)
-    BLOCK_M = 128
-    BLOCK_N = 128
+
+    # Adjust block size based on GPU shared memory
+    # RTX 3090 has ~100KB, A100/H100 have ~160KB+
+    props = torch.cuda.get_device_properties(torch.cuda.current_device())
+    if props.total_memory < 30 * 1024**3:  # Less than 30GB (e.g., RTX 3090 24GB)
+        BLOCK_M = 64
+        BLOCK_N = 64
+    else:
+        BLOCK_M = 128
+        BLOCK_N = 128
     assert (q_len % (stride * BLOCK_M) == 0)
     assert (kv_len % (stride * BLOCK_N) == 0)
 
