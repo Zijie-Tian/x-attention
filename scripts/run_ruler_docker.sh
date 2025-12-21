@@ -1,6 +1,8 @@
 #!/bin/bash
-# Docker launcher script for x-attention
-# Usage: ./scripts/launch_docker.sh
+# Docker runner script for RULER benchmark
+# Usage: ./scripts/run_ruler_docker.sh
+#
+# To modify parameters, edit the Configuration section below
 
 set -e
 
@@ -8,11 +10,19 @@ set -e
 # Configuration
 #############################################
 
-IMAGE_NAME="tzj/xattn:v0.3"
-GPUS="all"
+# Docker settings
+IMAGE_NAME="tzj/xattn:v0.4"  # v0.4 has RULER data pre-installed
+GPUS="device=0"              # Use only GPU 0 (A100)
 MODEL_DIR="/home/zijie/models"
-CONTAINER_NAME="xattn"
 SHM_SIZE="16g"
+
+# RULER benchmark settings
+# Note: Setup is not needed for v0.4, data is already prepared in the image
+MODEL_NAME="llama3.1-8b-chat"
+BENCHMARK="synthetic"
+METRIC="xattn"               # Metric to use (e.g., xattn)
+STRIDE="16"                  # Stride value for xattn (e.g., 16, 8, 4)
+THRESHOLD=""                 # Threshold value (leave empty for default)
 
 #############################################
 # Script logic
@@ -24,13 +34,9 @@ PROJECT_DIR="$(dirname "${SCRIPT_DIR}")"
 HOST_UID=$(id -u)
 HOST_GID=$(id -g)
 
-# Remove existing container if exists
-docker rm -f $CONTAINER_NAME 2>/dev/null || true
-
 # Build docker command
 DOCKER_CMD="docker run --rm"
 DOCKER_CMD="$DOCKER_CMD --gpus $GPUS"
-DOCKER_CMD="$DOCKER_CMD --name $CONTAINER_NAME"
 DOCKER_CMD="$DOCKER_CMD --shm-size=$SHM_SIZE"
 DOCKER_CMD="$DOCKER_CMD --ipc=host"
 DOCKER_CMD="$DOCKER_CMD --ulimit memlock=-1"
@@ -59,18 +65,39 @@ DOCKER_CMD="$DOCKER_CMD -w /workspace/x-attention"
 
 # Print configuration
 echo "========================================"
-echo "x-attention Docker Launcher"
+echo "RULER Benchmark (Docker)"
 echo "========================================"
 echo "Image:        $IMAGE_NAME"
 echo "GPUs:         $GPUS"
-echo "Model Dir:    $MODEL_DIR"
-echo "Project Dir:  $PROJECT_DIR"
+echo "Model Dir:    $MODEL_DIR -> /data/models"
 echo "========================================"
-echo ""
-echo "After entering the container, run:"
-echo "  pip install -e .  # Install xattn package"
-echo "  python eval/efficiency/attention_speedup.py"
+
+#############################################
+# Build container command
+#############################################
+
+# Build run command with configured parameters
+RUN_ARGS="$MODEL_NAME $BENCHMARK --metric $METRIC"
+
+if [ -n "$STRIDE" ]; then
+    RUN_ARGS="$RUN_ARGS --stride $STRIDE"
+fi
+
+if [ -n "$THRESHOLD" ]; then
+    RUN_ARGS="$RUN_ARGS --threshold $THRESHOLD"
+fi
+
+# Update MODEL_DIR in run.sh to point to /data/models
+CONTAINER_CMD="pip install -e . -q && cd eval/RULER && cd scripts && ./run.sh $RUN_ARGS"
+
+echo "Mode:         Benchmark"
+echo "Model:        $MODEL_NAME"
+echo "Benchmark:    $BENCHMARK"
+echo "Metric:       $METRIC"
+[ -n "$STRIDE" ] && echo "Stride:       $STRIDE"
+[ -n "$THRESHOLD" ] && echo "Threshold:    $THRESHOLD"
+echo "========================================"
 echo ""
 
 # Execute with docker group permissions
-sg docker -c "$DOCKER_CMD -it $IMAGE_NAME /bin/bash"
+eval "sg docker -c \"$DOCKER_CMD $IMAGE_NAME bash -c \\\"$CONTAINER_CMD\\\"\""

@@ -79,6 +79,30 @@ Both scripts automatically:
 - Mount home directory and project
 - Set shared memory to 16GB
 
+#### Script Writing Guidelines
+
+**IMPORTANT**: When writing new shell scripts for this project:
+
+1. **Use Variables, Not Arguments**: Configure scripts using variables defined at the top of the file, similar to `launch_docker.sh`
+   - ❌ Avoid: `./script.sh --stride 16 --metric xattn`
+   - ✅ Prefer: Edit variables in the script's Configuration section
+
+2. **Configuration Section**: Always include a clear Configuration section at the top with all tunable parameters:
+   ```bash
+   #############################################
+   # Configuration
+   #############################################
+
+   IMAGE_NAME="tzj/xattn:v0.3"
+   STRIDE=16
+   METRIC="xattn"
+   # ... other parameters
+   ```
+
+3. **Minimal External Parameters**: Keep command-line arguments to a minimum (ideally none). Users should modify the script directly for different configurations.
+
+4. **Reference**: See `scripts/launch_docker.sh` as the ideal template for script structure.
+
 ### Directory Structure Inside Container
 
 ```

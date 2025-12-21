@@ -87,5 +87,5 @@ else
     CONTAINER_CMD="$*"
 fi
 
-# Execute
-$DOCKER_CMD $IMAGE_NAME bash -c "$CONTAINER_CMD"
+# Execute with docker group permissions
+sg docker -c "$DOCKER_CMD $IMAGE_NAME bash -c '$CONTAINER_CMD'"

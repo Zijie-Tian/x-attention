@@ -121,9 +121,9 @@ def forward_eval(
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
 
-        query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-        key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        query_states = query_states.view(bsz, q_len, self.config.num_attention_heads, self.head_dim).transpose(1, 2)
+        key_states = key_states.view(bsz, q_len, self.config.num_key_value_heads, self.head_dim).transpose(1, 2)
+        value_states = value_states.view(bsz, q_len, self.config.num_key_value_heads, self.head_dim).transpose(1, 2)
         if self.fastprefillconfig.print_detail:
             torch.cuda.synchronize()
             reshape_time = time.time() - start_time
@@ -203,9 +203,9 @@ def forward_eval(
 
         if self.fastprefillconfig.print_detail:
             start_time = time.time()
-        if attn_output.size() != (bsz, self.num_heads, q_len, self.head_dim):
+        if attn_output.size() != (bsz, self.config.num_attention_heads, q_len, self.head_dim):
             raise ValueError(
-                f"`attn_output` should be of size {(bsz, self.num_heads, q_len, self.head_dim)}, but is"
+                f"`attn_output` should be of size {(bsz, self.config.num_attention_heads, q_len, self.head_dim)}, but is"
                 f" {attn_output.size()}"
             )
         attn_output = attn_output.transpose(1, 2).contiguous()
@@ -217,7 +217,7 @@ def forward_eval(
             post_attn_time = time.time() - start_time
             print(f"     Post-attention processing took: {post_attn_time:.6f} seconds")
 
-        return attn_output, None, past_key_value
+        return attn_output, None
 
 
 
@@ -335,9 +335,9 @@ def forward_to_save(
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
 
-        query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-        key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        query_states = query_states.view(bsz, q_len, self.config.num_attention_heads, self.head_dim).transpose(1, 2)
+        key_states = key_states.view(bsz, q_len, self.config.num_key_value_heads, self.head_dim).transpose(1, 2)
+        value_states = value_states.view(bsz, q_len, self.config.num_key_value_heads, self.head_dim).transpose(1, 2)
         if self.fastprefillconfig.print_detail:
             torch.cuda.synchronize()
             reshape_time = time.time() - start_time
@@ -433,9 +433,9 @@ def forward_to_save(
 
         if self.fastprefillconfig.print_detail:
             start_time = time.time()
-        if attn_output.size() != (bsz, self.num_heads, q_len, self.head_dim):
+        if attn_output.size() != (bsz, self.config.num_attention_heads, q_len, self.head_dim):
             raise ValueError(
-                f"`attn_output` should be of size {(bsz, self.num_heads, q_len, self.head_dim)}, but is"
+                f"`attn_output` should be of size {(bsz, self.config.num_attention_heads, q_len, self.head_dim)}, but is"
                 f" {attn_output.size()}"
             )
         attn_output = attn_output.transpose(1, 2).contiguous()
@@ -447,7 +447,7 @@ def forward_to_save(
             post_attn_time = time.time() - start_time
             print(f"     Post-attention processing took: {post_attn_time:.6f} seconds")
 
-        return attn_output, None, past_key_value
+        return attn_output, None
 
 def load_fake_model(layer_to_save,target_len,name_or_path=""):
     model = LlamaForCausalLM.from_pretrained(

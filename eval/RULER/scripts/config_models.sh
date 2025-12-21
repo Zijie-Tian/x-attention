@@ -16,19 +16,19 @@ TEMPERATURE="0.0" # greedy
 TOP_P="1.0"
 TOP_K="32"
 SEQ_LENGTHS=(
-    131072
-    65536
-    32768
+    # 131072
+    # 65536
+    # 32768
     16384
-    8192
-    4096
+    # 8192
+    # 4096
 )
 
 MODEL_SELECT() {
     MODEL_NAME=$1
     MODEL_DIR=$2
     ENGINE_DIR=$3
-    
+
     case $MODEL_NAME in
         llama3.1-8b-chat)
             MODEL_PATH="${MODEL_DIR}/Llama-3.1-8B-Instruct"
