@@ -3,6 +3,9 @@ models/
 slurm_scripts/
 Block-Sparse-Attention/
 
+# Ignore all subdirectories in figures/ but keep files
+figures/*/
+
 eval/RULER/docker
 eval/RULER/scripts/benchmark_root
 eval/RULER/scripts/data/synthetic/json/*json

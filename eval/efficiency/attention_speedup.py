@@ -42,7 +42,7 @@ if __name__ == "__main__":
         layer_to_save = 12
         if not os.path.exists(query_path) or not os.path.exists(key_path):
 
-            model, tokenizer = load_fake_model(name_or_path="/home/zijie/models/Llama-3.2-1B-Instruct", layer_to_save=layer_to_save, target_len=seq_len*1024)
+            model, tokenizer = load_fake_model(name_or_path="/data/models/Llama-3.1-8B-Instruct", layer_to_save=layer_to_save, target_len=seq_len*1024)
             input_ids = generate_prompt(tokenizer,seq_len*1024)
             chunk_size = 4096
             # Always recreate cache with appropriate size for current sequence length
