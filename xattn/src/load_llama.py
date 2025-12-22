@@ -25,6 +25,10 @@ try:
     from xattn.src.Flexprefill import Flexprefill_prefill
 except:
     print("Flex Prefill Import Fail")
+try:
+    from xattn.src.Compass import Compass_prefill
+except:
+    print("Compass Prefill Import Fail")
 from xattn.src.utils import *
 
 logger = logging.get_logger(__name__)
@@ -179,6 +183,8 @@ def forward_eval(
                 attn_output = Full_prefill(query_states, key_states, value_states,attention_mask=attention_mask)
             elif self.fastprefillconfig.metric == "minfer":
                 attn_output = Minference_prefill(query_states, key_states, value_states, adaptive_budget=0.3)
+            elif self.fastprefillconfig.metric == "compass":
+                attn_output = Compass_prefill(query_states, key_states, value_states, attention_mask=attention_mask)
         else:
             if key_states.device != query_states.device:
                 key_states = key_states.to(query_states.device)
@@ -230,7 +236,7 @@ class FastPrefillConfig(dict):
         - threshold (float or torch.Tensor, optional): The threshold for selecting relevant attention blocks.
         - print_detail (bool): Whether to print detailed timing and debugging information.
         - stride (int): Determines the level of fused attention computation (e.g., 16, 8, or 4).
-        - metric (str): Defines the type of prefill mechanism used ('xattn', 'full', 'minfer', 'flex').
+        - metric (str): Defines the type of prefill mechanism used ('xattn', 'full', 'minfer', 'flex', 'compass').
 
         Methods:
         - __init__: Initializes the configuration with user-defined or default values.
@@ -393,6 +399,8 @@ def forward_to_save(
                 attn_output = Full_prefill(query_states, key_states, value_states,attention_mask=attention_mask)
             elif self.fastprefillconfig.metric == "minfer":
                 attn_output = Minference_prefill(query_states, key_states, value_states, adaptive_budget=0.3)
+            elif self.fastprefillconfig.metric == "compass":
+                attn_output = Compass_prefill(query_states, key_states, value_states, attention_mask=attention_mask)
         else:
             if key_states.device != query_states.device:
                 key_states = key_states.to(query_states.device)
