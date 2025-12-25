@@ -184,7 +184,13 @@ def forward_eval(
             elif self.fastprefillconfig.metric == "minfer":
                 attn_output = Minference_prefill(query_states, key_states, value_states, adaptive_budget=0.3)
             elif self.fastprefillconfig.metric == "compass":
-                attn_output = Compass_prefill(query_states, key_states, value_states, attention_mask=attention_mask)
+                # COMPASS uses lambd (default: 5.0) - different from xattn threshold
+                # xattn threshold is for attention mass (0.9), compass lambd is for max difference
+                # Use default 5.0 unless a scalar threshold is explicitly provided
+                compass_lambd = 3.0
+                if hasattr(self.fastprefillconfig, 'compass_lambd'):
+                    compass_lambd = self.fastprefillconfig.compass_lambd
+                attn_output = Compass_prefill(query_states, key_states, value_states, lambd=compass_lambd)
         else:
             if key_states.device != query_states.device:
                 key_states = key_states.to(query_states.device)
@@ -237,6 +243,7 @@ class FastPrefillConfig(dict):
         - print_detail (bool): Whether to print detailed timing and debugging information.
         - stride (int): Determines the level of fused attention computation (e.g., 16, 8, or 4).
         - metric (str): Defines the type of prefill mechanism used ('xattn', 'full', 'minfer', 'flex', 'compass').
+        - compass_lambd (float): COMPASS sparsity threshold. Block is sparse if (m - m_local) > lambd. Default: 5.0.
 
         Methods:
         - __init__: Initializes the configuration with user-defined or default values.
@@ -247,7 +254,8 @@ class FastPrefillConfig(dict):
         threshold:float=None,
         print_detail:bool=False,
         stride = 16,
-        metric = "xattn"
+        metric = "xattn",
+        compass_lambd: float = 5.0,
     ):
         """
         Initialize the configuration with default or user-provided values.
@@ -256,6 +264,7 @@ class FastPrefillConfig(dict):
         self.print_detail = print_detail
         self.metric = metric
         self.stride = stride
+        self.compass_lambd = compass_lambd  # COMPASS sparsity threshold (default: 5.0)
         if threshold is not None:
             self.threshold = torch.ones((32,32)).to("cuda")*threshold
         else:
@@ -400,7 +409,13 @@ def forward_to_save(
             elif self.fastprefillconfig.metric == "minfer":
                 attn_output = Minference_prefill(query_states, key_states, value_states, adaptive_budget=0.3)
             elif self.fastprefillconfig.metric == "compass":
-                attn_output = Compass_prefill(query_states, key_states, value_states, attention_mask=attention_mask)
+                # COMPASS uses lambd (default: 5.0) - different from xattn threshold
+                # xattn threshold is for attention mass (0.9), compass lambd is for max difference
+                # Use default 5.0 unless a scalar threshold is explicitly provided
+                compass_lambd = 5.0
+                if hasattr(self.fastprefillconfig, 'compass_lambd'):
+                    compass_lambd = self.fastprefillconfig.compass_lambd
+                attn_output = Compass_prefill(query_states, key_states, value_states, lambd=compass_lambd)
         else:
             if key_states.device != query_states.device:
                 key_states = key_states.to(query_states.device)
