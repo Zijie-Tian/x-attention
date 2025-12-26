@@ -57,6 +57,7 @@ METIRC=${METRIC:-"--metric xattn"} # Default: xattn
 PRINT_DETAIL=${PRINT_DETAIL:-""}
 STRIDE=${STRIDE:-""}
 THRESHOLD=${THRESHOLD:-""}
+AVGPOOL_TOPK=${AVGPOOL_TOPK:-""}
 
 shift 2 # Remove MODEL_NAME and BENCHMARK
 while [[ $# -gt 0 ]]; do
@@ -75,6 +76,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --stride)
             STRIDE="--stride $2"
+            shift 2
+            ;;
+        --avgpool_topk)
+            AVGPOOL_TOPK="--avgpool_topk $2"
             shift 2
             ;;
         *)
@@ -115,9 +120,16 @@ total_time=0
 for MAX_SEQ_LENGTH in "${SEQ_LENGTHS[@]}"; do
     SETTINGS_INFO=""
     if [[ -n ${METRIC} ]]; then SETTINGS_INFO+="${METRIC#--metric }_"; fi
-    if [[ -n ${STRIDE} ]]; then SETTINGS_INFO+="fuse_${STRIDE##* }_"; fi
+    # For avgpool: use topk instead of fuse/stride
+    # For other metrics (xattn, etc.): use fuse/stride
+    METRIC_NAME="${METRIC#--metric }"
+    if [[ "${METRIC_NAME}" == "avgpool" ]]; then
+        if [[ -n ${AVGPOOL_TOPK} ]]; then SETTINGS_INFO+="topk_${AVGPOOL_TOPK##* }_"; fi
+    else
+        if [[ -n ${STRIDE} ]]; then SETTINGS_INFO+="fuse_${STRIDE##* }_"; fi
+    fi
     if [[ -n ${THRESHOLD} && -z ${PRECISE_THRESHOLD} ]]; then SETTINGS_INFO+="thresh_${THRESHOLD#--threshold }_"; fi
-    
+
     RESULTS_DIR="${ROOT_DIR}/${SETTINGS_INFO}${MODEL_NAME}/${BENCHMARK}/${MAX_SEQ_LENGTH}"
     DATA_DIR="${RESULTS_DIR}/data"
     PRED_DIR="${RESULTS_DIR}/pred"
@@ -152,6 +164,7 @@ for MAX_SEQ_LENGTH in "${SEQ_LENGTHS[@]}"; do
             ${METRIC} \
             ${THRESHOLD} \
             ${STRIDE} \
+            ${AVGPOOL_TOPK} \
             ${PRINT_DETAIL}
         end_time=$(date +%s)
         time_diff=$((end_time - start_time))

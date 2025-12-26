@@ -29,6 +29,10 @@ try:
     from xattn.src.Compass import Compass_prefill
 except:
     print("Compass Prefill Import Fail")
+try:
+    from xattn.src.AvgPool import AvgPool_prefill
+except:
+    print("AvgPool Prefill Import Fail")
 from xattn.src.utils import *
 
 logger = logging.get_logger(__name__)
@@ -191,6 +195,9 @@ def forward_eval(
                 if hasattr(self.fastprefillconfig, 'compass_lambd'):
                     compass_lambd = self.fastprefillconfig.compass_lambd
                 attn_output = Compass_prefill(query_states, key_states, value_states, lambd=compass_lambd)
+            elif self.fastprefillconfig.metric == "avgpool":
+                top_k = self.fastprefillconfig.top_k
+                attn_output = AvgPool_prefill(query_states, key_states, value_states, top_k=top_k)
         else:
             if key_states.device != query_states.device:
                 key_states = key_states.to(query_states.device)
@@ -235,15 +242,16 @@ def forward_eval(
 
 class FastPrefillConfig(dict):
     """
-        Configuration class for FastPrefill, which provides flexible settings for optimizing 
+        Configuration class for FastPrefill, which provides flexible settings for optimizing
         prefill computations in transformer models.
 
         Attributes:
         - threshold (float or torch.Tensor, optional): The threshold for selecting relevant attention blocks.
         - print_detail (bool): Whether to print detailed timing and debugging information.
         - stride (int): Determines the level of fused attention computation (e.g., 16, 8, or 4).
-        - metric (str): Defines the type of prefill mechanism used ('xattn', 'full', 'minfer', 'flex', 'compass').
+        - metric (str): Defines the type of prefill mechanism used ('xattn', 'full', 'minfer', 'flex', 'compass', 'avgpool').
         - compass_lambd (float): COMPASS sparsity threshold. Block is sparse if (m - m_local) > lambd. Default: 5.0.
+        - top_k (int): Number of top blocks to select per query block row for AvgPool. Default: 10.
 
         Methods:
         - __init__: Initializes the configuration with user-defined or default values.
@@ -256,6 +264,7 @@ class FastPrefillConfig(dict):
         stride = 16,
         metric = "xattn",
         compass_lambd: float = 5.0,
+        top_k: int = 64,
     ):
         """
         Initialize the configuration with default or user-provided values.
@@ -265,6 +274,7 @@ class FastPrefillConfig(dict):
         self.metric = metric
         self.stride = stride
         self.compass_lambd = compass_lambd  # COMPASS sparsity threshold (default: 5.0)
+        self.top_k = top_k  # AvgPool top-k blocks per row (default: 10)
         if threshold is not None:
             self.threshold = torch.ones((32,32)).to("cuda")*threshold
         else:
@@ -416,6 +426,9 @@ def forward_to_save(
                 if hasattr(self.fastprefillconfig, 'compass_lambd'):
                     compass_lambd = self.fastprefillconfig.compass_lambd
                 attn_output = Compass_prefill(query_states, key_states, value_states, lambd=compass_lambd)
+            elif self.fastprefillconfig.metric == "avgpool":
+                top_k = self.fastprefillconfig.top_k
+                attn_output = AvgPool_prefill(query_states, key_states, value_states, top_k=top_k)
         else:
             if key_states.device != query_states.device:
                 key_states = key_states.to(query_states.device)
@@ -426,8 +439,8 @@ def forward_to_save(
             query_states = query_states.squeeze(0).squeeze(1)
             key_states = key_states.squeeze(0).contiguous()
             attn_output = flashinfer.single_decode_with_kv_cache(
-                query_states, 
-                key_states, 
+                query_states,
+                key_states,
                 value_states,
                 kv_layout="HND"
             )

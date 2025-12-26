@@ -94,8 +94,9 @@ parser.add_argument("--batch_size", type=int, default=1)
 # Xattention
 parser.add_argument("--threshold", type=float, default=None, help="Threshold for grouping.")
 parser.add_argument("--print_detail", action='store_true', default=False, help="Print detailed information. Default is False.")
-parser.add_argument("--stride", type=int, default=16, help="Small block size") 
+parser.add_argument("--stride", type=int, default=16, help="Small block size")
 parser.add_argument("--metric", type=str, default="xattn", help="")
+parser.add_argument("--avgpool_topk", type=int, default=64, help="Top-k blocks per row for avgpool metric")
 
 
 
@@ -107,8 +108,9 @@ if args.server_type == 'hf' or args.server_type == 'gemini':
 fastprefillconfig = FastPrefillConfig(
     threshold=args.threshold,
     print_detail=args.print_detail,
-    stride = args.stride,
+    stride=args.stride,
     metric=args.metric,
+    top_k=args.avgpool_topk,
 )
 
 def get_llm(tokens_to_generate):
