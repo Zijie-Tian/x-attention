@@ -11,6 +11,7 @@ set -e
 
 IMAGE_NAME="tzj/xattn:v0.3"
 GPUS="all"
+VISIBLE_GPUS="0"  # Limit container to see only these GPUs (e.g., "0", "0,1", or "" for all)
 MODEL_DIR="/home/zijie/models"
 SHM_SIZE="16g"
 AUTO_INSTALL=true  # Automatically run pip install -e . before command
@@ -18,6 +19,13 @@ AUTO_INSTALL=true  # Automatically run pip install -e . before command
 #############################################
 # Script logic
 #############################################
+
+# Cleanup any existing containers using the same image
+EXISTING_CONTAINERS=$(docker ps -q --filter ancestor="$IMAGE_NAME" 2>/dev/null || true)
+if [ -n "$EXISTING_CONTAINERS" ]; then
+    echo "Stopping existing containers using $IMAGE_NAME..."
+    docker stop $EXISTING_CONTAINERS 2>/dev/null || true
+fi
 
 # Check if command is provided
 if [ $# -eq 0 ]; then
@@ -64,6 +72,9 @@ DOCKER_CMD="$DOCKER_CMD -v /etc/group:/etc/group:ro"
 [[ -n "${HTTPS_PROXY:-}" ]] && DOCKER_CMD="$DOCKER_CMD -e HTTPS_PROXY=$HTTPS_PROXY"
 [[ -n "${no_proxy:-}" ]] && DOCKER_CMD="$DOCKER_CMD -e no_proxy=$no_proxy"
 [[ -n "${NO_PROXY:-}" ]] && DOCKER_CMD="$DOCKER_CMD -e NO_PROXY=$NO_PROXY"
+
+# GPU visibility - limit which GPUs the container can see
+[[ -n "${VISIBLE_GPUS:-}" ]] && DOCKER_CMD="$DOCKER_CMD -e CUDA_VISIBLE_DEVICES=$VISIBLE_GPUS"
 
 # Working directory
 DOCKER_CMD="$DOCKER_CMD -w /workspace/x-attention"

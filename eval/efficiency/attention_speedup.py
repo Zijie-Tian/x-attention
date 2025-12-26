@@ -28,25 +28,29 @@ import os
 
 if __name__ == "__main__":
 
-    lens = [4,8,16,32,64,128]
+    # Sequence lengths in tokens (not K)
+    # Examples: 512, 1024, 2048, 4096, 8192
+    lens = [512, 1024]
 
     speedups_xattn_8 = []
     speedups_xattn_16 = []
     speedups_minfer = []
     past_key_values = None
     for seq_len in lens:
-        print(f"Testing {seq_len}K")
-        query_path = f"output/query_{seq_len*1024}.pkl"
-        key_path = f"output/key_{seq_len*1024}.pkl"
+        # seq_len is now in tokens directly
+        seq_len_display = f"{seq_len//1024}K" if seq_len >= 1024 else f"{seq_len}"
+        print(f"Testing {seq_len_display} ({seq_len} tokens)")
+        query_path = f"output/query_{seq_len}.pkl"
+        key_path = f"output/key_{seq_len}.pkl"
         config = FastPrefillConfig(metric = "xattn",stride = 16)
         layer_to_save = 12
         if not os.path.exists(query_path) or not os.path.exists(key_path):
 
-            model, tokenizer = load_fake_model(name_or_path="/data/models/Llama-3.1-8B-Instruct", layer_to_save=layer_to_save, target_len=seq_len*1024)
-            input_ids = generate_prompt(tokenizer,seq_len*1024)
-            chunk_size = 4096
+            model, tokenizer = load_fake_model(name_or_path="/data/models/Llama-3.1-8B-Instruct", layer_to_save=layer_to_save, target_len=seq_len)
+            input_ids = generate_prompt(tokenizer, seq_len)
+            chunk_size = min(4096, seq_len)  # Use smaller chunk for short sequences
             # Always recreate cache with appropriate size for current sequence length
-            past_key_values = StaticCache(config=model.config, batch_size=1, max_cache_len=seq_len*1024+1024, device=model.device, dtype=model.dtype)
+            past_key_values = StaticCache(config=model.config, max_batch_size=1, max_cache_len=seq_len+1024, device=model.device, dtype=model.dtype)
             with torch.no_grad():
                 for i in tqdm(range(0, input_ids.size(1), chunk_size), desc="Prefilling", unit="chunk"):
                     chunk = input_ids[:, i: i + chunk_size]
@@ -64,8 +68,8 @@ if __name__ == "__main__":
             q = pickle.load(f)
         with open(key_path, "rb") as f:
             k = pickle.load(f)
-        assert(q.shape[-2] == seq_len*1024)
-        assert(k.shape[-2] == seq_len*1024)
+        assert(q.shape[-2] == seq_len)
+        assert(k.shape[-2] == seq_len)
         torch.manual_seed(0)
 
         # Xattention args - adapt threshold to actual head count
@@ -102,7 +106,7 @@ if __name__ == "__main__":
             start_time = time.time()
             if XATTN_PREFILL:
                 try:
-                    xattn_output = Xattention_prefill(q, k, v, stride=8, threshold=threshold, use_triton=True, chunk_size=min(32768, seq_len*1024))
+                    xattn_output = Xattention_prefill(q, k, v, stride=8, threshold=threshold, use_triton=True, chunk_size=min(32768, seq_len))
                 except Exception as e:
                     print(f"Xattention_prefill stride=8 failed: {e}")
                     XATTN_PREFILL = False
@@ -117,7 +121,7 @@ if __name__ == "__main__":
             start_time = time.time()
             if XATTN_PREFILL:
                 try:
-                    xattn_output = Xattention_prefill(q, k, v, stride=16, threshold=threshold, use_triton=True, chunk_size=min(32768, seq_len*1024))
+                    xattn_output = Xattention_prefill(q, k, v, stride=16, threshold=threshold, use_triton=True, chunk_size=min(32768, seq_len))
                 except Exception as e:
                     print(f"Xattention_prefill stride=16 failed: {e}")
                     XATTN_PREFILL = False
@@ -152,7 +156,7 @@ if __name__ == "__main__":
         avg_time_full = total_time_full / num_iterations
 
         # Calculate speedups
-        print(f"{seq_len}K Minfer: {avg_time_minfer:.4f}s xattn_8: {avg_time_xattn_8:.4f}s xattn_16: {avg_time_xattn_16:.4f}s full: {avg_time_full:.4f}s")
+        print(f"{seq_len_display} Minfer: {avg_time_minfer:.4f}s xattn_8: {avg_time_xattn_8:.4f}s xattn_16: {avg_time_xattn_16:.4f}s full: {avg_time_full:.4f}s")
         speedup_xattn_8 = avg_time_full / avg_time_xattn_8 if avg_time_xattn_8 != float('inf') else 0
         speedup_xattn_16 = avg_time_full / avg_time_xattn_16 if avg_time_xattn_16 != float('inf') else 0
         speedup_minfer = avg_time_full / avg_time_minfer if avg_time_minfer != float('inf') else 0
@@ -163,4 +167,5 @@ if __name__ == "__main__":
     # Output results
     print(f"\n{'Length':<10}{'Xattn 8 Speedup':<20}{'Xattn 16 Speedup':<25}{'Minfer Speedup'}")
     for seq_len, speedup_xattn_8, speedup_xattn_16, speedup_minfer in zip(lens, speedups_xattn_8, speedups_xattn_16, speedups_minfer):
-        print(f"{str(seq_len)+'K':<10}{speedup_xattn_8:<20.2f}{speedup_xattn_16:<25.2f}{speedup_minfer:.2f}")
+        seq_len_display = f"{seq_len//1024}K" if seq_len >= 1024 else f"{seq_len}"
+        print(f"{seq_len_display:<10}{speedup_xattn_8:<20.2f}{speedup_xattn_16:<25.2f}{speedup_minfer:.2f}")

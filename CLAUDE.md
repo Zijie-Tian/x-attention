@@ -103,6 +103,41 @@ Both scripts automatically:
 
 4. **Reference**: See `scripts/launch_docker.sh` as the ideal template for script structure.
 
+#### Tools Scripts Guidelines (`tools/` directory)
+
+**IMPORTANT**: Python scripts in `tools/` should be simple and concise:
+
+1. **Keep scripts under 50 lines** (excluding imports and docstrings)
+2. **Minimize print statements**: Only print final results, not intermediate progress
+3. **Extract reusable logic into utility modules** (e.g., `sparsity_utils.py`)
+4. **Configuration at top**: Use simple variable assignments for configurable parameters
+5. **Single responsibility**: Each script should do one thing well
+
+**Example structure**:
+```python
+"""Brief description of what the script does."""
+import torch
+from utils_module import core_function_1, core_function_2
+
+# Configuration
+PARAM_1 = value1
+PARAM_2 = value2
+
+def main():
+    results = []
+    for item in items:
+        result = core_function_1(item, PARAM_1)
+        results.append(result)
+
+    # Print only final summary
+    print("Results:")
+    for r in results:
+        print(f"  {r}")
+
+if __name__ == '__main__':
+    main()
+```
+
 ### Directory Structure Inside Container
 
 ```
