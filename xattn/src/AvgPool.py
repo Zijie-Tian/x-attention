@@ -26,7 +26,8 @@ def AvgPool_estimate(
     key_states: torch.Tensor,
     block_size: int = 128,
     chunk_size: int = 16384,
-    top_k: int = 10,
+    top_k: int = None,
+    top_p: float = None,
     causal: bool = True,
     pool_method: str = "avg",
     **kwargs,
@@ -36,20 +37,21 @@ def AvgPool_estimate(
 
     For each query block, pools the queries and keys within each block,
     computes attention scores between pooled representations, and selects
-    top-k key blocks per query block row.
+    top-k or top-p key blocks per query block row.
 
     Args:
         query_states: Query tensor [batch, num_heads, q_len, head_dim]
         key_states: Key tensor [batch, num_heads, k_len, head_dim]
         block_size: Size of each attention block (default: 128)
         chunk_size: Padding alignment for block calculation (default: 16384)
-        top_k: Number of top blocks to select per query block row
+        top_k: Number of top blocks to select per query block row (mutually exclusive with top_p)
+        top_p: Cumulative probability threshold for nucleus sampling (mutually exclusive with top_k)
         causal: Whether to apply causal masking
         pool_method: "avg" for mean pooling, "max" for max pooling
 
     Returns:
         block_scores: [batch, num_heads, q_blocks, k_blocks] - softmax attention per block
-        block_mask: [batch, num_heads, q_blocks, k_blocks] - True = keep (top-k selected)
+        block_mask: [batch, num_heads, q_blocks, k_blocks] - True = keep (selected blocks)
     """
     batch_size, num_heads, k_len, head_dim = key_states.shape
     _, _, q_len, _ = query_states.shape
@@ -105,8 +107,13 @@ def AvgPool_estimate(
     # Apply softmax to get attention distribution
     block_scores_softmax = torch.softmax(block_scores, dim=-1)
 
-    # Select top-k blocks per row
-    block_mask = _get_topk_mask(block_scores_softmax, top_k, causal, actual_q_blocks, actual_k_blocks)
+    # Select blocks: top-p takes priority over top-k
+    if top_p is not None:
+        block_mask = _get_topp_mask(block_scores_softmax, top_p, causal, actual_q_blocks, actual_k_blocks)
+    elif top_k is not None:
+        block_mask = _get_topk_mask(block_scores_softmax, top_k, causal, actual_q_blocks, actual_k_blocks)
+    else:
+        raise ValueError("Either top_k or top_p must be specified")
 
     # Pad mask to match chunk-aligned block numbers if needed
     if actual_q_blocks < q_block_num or actual_k_blocks < k_block_num:
@@ -168,13 +175,68 @@ def _get_topk_mask(block_scores: torch.Tensor, top_k: int, causal: bool,
     return mask
 
 
+def _get_topp_mask(block_scores: torch.Tensor, top_p: float, causal: bool,
+                   num_q_blocks: int, num_k_blocks: int) -> torch.Tensor:
+    """
+    Select blocks using top-p (nucleus) sampling per row.
+
+    Sort blocks by score descending, accumulate until cumsum > top_p.
+
+    Args:
+        block_scores: [batch, heads, q_blocks, k_blocks] - softmax attention scores
+        top_p: Cumulative probability threshold (0.0-1.0)
+        causal: Whether to apply causal masking
+        num_q_blocks: Number of query blocks
+        num_k_blocks: Number of key blocks
+
+    Returns:
+        mask: [batch, heads, q_blocks, k_blocks] - True = keep
+    """
+    batch_size, num_heads, _, _ = block_scores.shape
+    device = block_scores.device
+
+    mask = torch.zeros(batch_size, num_heads, num_q_blocks, num_k_blocks,
+                       dtype=torch.bool, device=device)
+
+    for i in range(num_q_blocks):
+        if causal:
+            valid_k = i + 1
+        else:
+            valid_k = num_k_blocks
+
+        if valid_k > 0:
+            scores_row = block_scores[:, :, i, :valid_k]  # [batch, heads, valid_k]
+
+            # Sort descending
+            sorted_scores, sorted_indices = torch.sort(scores_row, dim=-1, descending=True)
+
+            # Cumulative sum
+            cumsum = torch.cumsum(sorted_scores, dim=-1)
+
+            # Find cutoff: first position where cumsum > top_p
+            # Include at least 1 block
+            cutoff_mask = cumsum <= top_p
+            cutoff_mask[..., 0] = True  # Always include at least 1
+
+            # Scatter True to selected positions
+            for b in range(batch_size):
+                for h in range(num_heads):
+                    num_selected = cutoff_mask[b, h].sum().item() + 1  # +1 for the first exceeding
+                    num_selected = min(num_selected, valid_k)
+                    selected_indices = sorted_indices[b, h, :num_selected]
+                    mask[b, h, i, selected_indices] = True
+
+    return mask
+
+
 def AvgPool_prefill(
     query_states: torch.Tensor,
     key_states: torch.Tensor,
     value_states: torch.Tensor,
     block_size: int = 128,
     chunk_size: int = 16384,
-    top_k: int = 10,
+    top_k: int = None,
+    top_p: float = None,
     causal: bool = True,
     pool_method: str = "avg",
     **kwargs,
@@ -188,7 +250,8 @@ def AvgPool_prefill(
         value_states: Value tensor [batch, num_heads, k_len, head_dim]
         block_size: Size of each attention block (default: 128)
         chunk_size: Padding alignment (default: 16384)
-        top_k: Number of top blocks to select per query block row
+        top_k: Number of top blocks to select per query block row (mutually exclusive with top_p)
+        top_p: Cumulative probability threshold for nucleus sampling (mutually exclusive with top_k)
         causal: Whether to apply causal masking
         pool_method: "avg" for mean pooling, "max" for max pooling
 
@@ -204,6 +267,7 @@ def AvgPool_prefill(
         block_size=block_size,
         chunk_size=chunk_size,
         top_k=top_k,
+        top_p=top_p,
         causal=causal,
         pool_method=pool_method,
     )

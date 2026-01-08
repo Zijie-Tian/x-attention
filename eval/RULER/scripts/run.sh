@@ -58,6 +58,7 @@ PRINT_DETAIL=${PRINT_DETAIL:-""}
 STRIDE=${STRIDE:-""}
 THRESHOLD=${THRESHOLD:-""}
 AVGPOOL_TOPK=${AVGPOOL_TOPK:-""}
+AVGPOOL_TOPP=${AVGPOOL_TOPP:-""}
 
 shift 2 # Remove MODEL_NAME and BENCHMARK
 while [[ $# -gt 0 ]]; do
@@ -80,6 +81,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --avgpool_topk)
             AVGPOOL_TOPK="--avgpool_topk $2"
+            shift 2
+            ;;
+        --avgpool_topp)
+            AVGPOOL_TOPP="--avgpool_topp $2"
             shift 2
             ;;
         *)
@@ -120,11 +125,16 @@ total_time=0
 for MAX_SEQ_LENGTH in "${SEQ_LENGTHS[@]}"; do
     SETTINGS_INFO=""
     if [[ -n ${METRIC} ]]; then SETTINGS_INFO+="${METRIC#--metric }_"; fi
-    # For avgpool: use topk instead of fuse/stride
+    # For avgpool: use topp or topk instead of fuse/stride
     # For other metrics (xattn, etc.): use fuse/stride
     METRIC_NAME="${METRIC#--metric }"
     if [[ "${METRIC_NAME}" == "avgpool" ]]; then
-        if [[ -n ${AVGPOOL_TOPK} ]]; then SETTINGS_INFO+="topk_${AVGPOOL_TOPK##* }_"; fi
+        # top-p takes priority over top-k for folder naming
+        if [[ -n ${AVGPOOL_TOPP} ]]; then
+            SETTINGS_INFO+="topp_${AVGPOOL_TOPP##* }_"
+        elif [[ -n ${AVGPOOL_TOPK} ]]; then
+            SETTINGS_INFO+="topk_${AVGPOOL_TOPK##* }_"
+        fi
     else
         if [[ -n ${STRIDE} ]]; then SETTINGS_INFO+="fuse_${STRIDE##* }_"; fi
     fi
@@ -165,6 +175,7 @@ for MAX_SEQ_LENGTH in "${SEQ_LENGTHS[@]}"; do
             ${THRESHOLD} \
             ${STRIDE} \
             ${AVGPOOL_TOPK} \
+            ${AVGPOOL_TOPP} \
             ${PRINT_DETAIL}
         end_time=$(date +%s)
         time_diff=$((end_time - start_time))

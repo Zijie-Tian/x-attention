@@ -97,6 +97,7 @@ parser.add_argument("--print_detail", action='store_true', default=False, help="
 parser.add_argument("--stride", type=int, default=16, help="Small block size")
 parser.add_argument("--metric", type=str, default="xattn", help="")
 parser.add_argument("--avgpool_topk", type=int, default=64, help="Top-k blocks per row for avgpool metric")
+parser.add_argument("--avgpool_topp", type=float, default=None, help="Top-p threshold for avgpool nucleus sampling (0.0-1.0)")
 
 
 
@@ -111,6 +112,7 @@ fastprefillconfig = FastPrefillConfig(
     stride=args.stride,
     metric=args.metric,
     top_k=args.avgpool_topk,
+    top_p=args.avgpool_topp,
 )
 
 def get_llm(tokens_to_generate):

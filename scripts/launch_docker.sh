@@ -8,7 +8,7 @@ set -e
 # Configuration
 #############################################
 
-IMAGE_NAME="tzj/xattn:v0.3"
+IMAGE_NAME="tzj/xattn:v0.4"
 GPUS="all"
 MODEL_DIR="/home/zijie/models"
 CONTAINER_NAME="xattn"

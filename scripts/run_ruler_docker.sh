@@ -2,28 +2,31 @@
 # Docker runner script for RULER benchmark
 # Usage: ./scripts/run_ruler_docker.sh
 #
-# To modify parameters, edit the Configuration section below
+# Parameters can be set via environment variables from a parent script:
+#   METRIC=xattn STRIDE=8 ./scripts/run_ruler_docker.sh
+#
+# Or edit the defaults below
 
 set -e
 
 #############################################
-# Configuration
+# Configuration (can be overridden by env vars)
 #############################################
 
 # Docker settings
-IMAGE_NAME="tzj/xattn:v0.5"  # v0.5 has pre-compiled CUDA extensions
-GPUS="device=0"              # Use only GPU 0 (A100)
-MODEL_DIR="/home/zijie/models"
-SHM_SIZE="16g"
+IMAGE_NAME="${IMAGE_NAME:-tzj/xattn:v0.5}"  # v0.6 has fixed transformers/nltk
+GPUS="${GPUS:-device=0}"                    # Use only GPU 0 (A100)
+MODEL_DIR="${MODEL_DIR:-/home/zijie/models}"
+SHM_SIZE="${SHM_SIZE:-16g}"
 
 # RULER benchmark settings
-# Note: Setup is not needed for v0.4, data is already prepared in the image
-MODEL_NAME="llama3.1-8b-chat"
-BENCHMARK="synthetic"
-METRIC="avgpool"               # Metric to use (e.g., xattn, avgpool, compass)
-STRIDE="16"                  # Stride value for xattn (e.g., 16, 8, 4)
-THRESHOLD=""                 # Threshold value (leave empty for default)
-AVGPOOL_TOPK="64"              # Top-k blocks per row for avgpool (leave empty for default: 64)
+MODEL_NAME="${MODEL_NAME:-llama3.1-8b-chat}"
+BENCHMARK="${BENCHMARK:-synthetic}"
+METRIC="${METRIC:-avgpool}"                 # Metric to use (e.g., xattn, avgpool, compass)
+STRIDE="${STRIDE:-16}"                      # Stride value for xattn (e.g., 16, 8, 4)
+THRESHOLD="${THRESHOLD:-}"                  # Threshold value (leave empty for default)
+AVGPOOL_TOPK="${AVGPOOL_TOPK:-}"            # Top-k blocks per row for avgpool
+AVGPOOL_TOPP="${AVGPOOL_TOPP:-}"            # Top-p threshold for avgpool nucleus sampling
 
 #############################################
 # Script logic
@@ -48,6 +51,8 @@ DOCKER_CMD="$DOCKER_CMD -e HOME=$HOME"
 
 # Mount volumes
 DOCKER_CMD="$DOCKER_CMD -v $HOME:$HOME"
+# Override ~/.local with empty tmpfs to prevent loading host's old packages
+# DOCKER_CMD="$DOCKER_CMD --tmpfs $HOME/.local:rw,exec,size=100m"
 DOCKER_CMD="$DOCKER_CMD -v $PROJECT_DIR:/workspace/x-attention"
 DOCKER_CMD="$DOCKER_CMD -v $MODEL_DIR:/data/models"
 DOCKER_CMD="$DOCKER_CMD -v /etc/passwd:/etc/passwd:ro"
@@ -65,6 +70,8 @@ DOCKER_CMD="$DOCKER_CMD -v /etc/group:/etc/group:ro"
 DOCKER_CMD="$DOCKER_CMD -e TORCH_EXTENSIONS_DIR=/workspace/.cache/torch_extensions"
 DOCKER_CMD="$DOCKER_CMD -e TORCHINDUCTOR_CACHE_DIR=/workspace/.cache/torch_inductor"
 DOCKER_CMD="$DOCKER_CMD -e MPLCONFIGDIR=/workspace/.cache/matplotlib"
+# Redirect pip user install to project directory (persists across container runs)
+DOCKER_CMD="$DOCKER_CMD -e PYTHONUSERBASE=/workspace/x-attention/.pip_cache"
 
 # Working directory
 DOCKER_CMD="$DOCKER_CMD -w /workspace/x-attention"
@@ -97,9 +104,13 @@ if [ -n "$AVGPOOL_TOPK" ]; then
     RUN_ARGS="$RUN_ARGS --avgpool_topk $AVGPOOL_TOPK"
 fi
 
+if [ -n "$AVGPOOL_TOPP" ]; then
+    RUN_ARGS="$RUN_ARGS --avgpool_topp $AVGPOOL_TOPP"
+fi
+
 # Update MODEL_DIR in run.sh to point to /data/models
-# Download NLTK punkt_tab data before running RULER
-CONTAINER_CMD="pip install -e . -q && python3 -m nltk.downloader punkt_tab && cd eval/RULER && cd scripts && ./run.sh $RUN_ARGS"
+# Download NLTK punkt_tab data if needed, then run RULER
+CONTAINER_CMD="pip install -e . -q --user && python3 -c \"import nltk; nltk.download('punkt_tab', quiet=True)\" && cd eval/RULER/scripts && ./run.sh $RUN_ARGS"
 
 echo "Mode:         Benchmark"
 echo "Model:        $MODEL_NAME"
@@ -108,6 +119,7 @@ echo "Metric:       $METRIC"
 [ -n "$STRIDE" ] && echo "Stride:       $STRIDE"
 [ -n "$THRESHOLD" ] && echo "Threshold:    $THRESHOLD"
 [ -n "$AVGPOOL_TOPK" ] && echo "AvgPool TopK: $AVGPOOL_TOPK"
+[ -n "$AVGPOOL_TOPP" ] && echo "AvgPool TopP: $AVGPOOL_TOPP"
 echo "========================================"
 echo ""
 

@@ -197,7 +197,8 @@ def forward_eval(
                 attn_output = Compass_prefill(query_states, key_states, value_states, lambd=compass_lambd)
             elif self.fastprefillconfig.metric == "avgpool":
                 top_k = self.fastprefillconfig.top_k
-                attn_output = AvgPool_prefill(query_states, key_states, value_states, top_k=top_k)
+                top_p = self.fastprefillconfig.top_p
+                attn_output = AvgPool_prefill(query_states, key_states, value_states, top_k=top_k, top_p=top_p)
         else:
             if key_states.device != query_states.device:
                 key_states = key_states.to(query_states.device)
@@ -251,7 +252,8 @@ class FastPrefillConfig(dict):
         - stride (int): Determines the level of fused attention computation (e.g., 16, 8, or 4).
         - metric (str): Defines the type of prefill mechanism used ('xattn', 'full', 'minfer', 'flex', 'compass', 'avgpool').
         - compass_lambd (float): COMPASS sparsity threshold. Block is sparse if (m - m_local) > lambd. Default: 5.0.
-        - top_k (int): Number of top blocks to select per query block row for AvgPool. Default: 10.
+        - top_k (int): Number of top blocks to select per query block row for AvgPool. Default: 64.
+        - top_p (float): Cumulative probability threshold for AvgPool nucleus sampling. Default: None (use top_k).
 
         Methods:
         - __init__: Initializes the configuration with user-defined or default values.
@@ -265,6 +267,7 @@ class FastPrefillConfig(dict):
         metric = "xattn",
         compass_lambd: float = 5.0,
         top_k: int = 64,
+        top_p: float = None,
     ):
         """
         Initialize the configuration with default or user-provided values.
@@ -274,7 +277,8 @@ class FastPrefillConfig(dict):
         self.metric = metric
         self.stride = stride
         self.compass_lambd = compass_lambd  # COMPASS sparsity threshold (default: 5.0)
-        self.top_k = top_k  # AvgPool top-k blocks per row (default: 10)
+        self.top_k = top_k  # AvgPool top-k blocks per row (default: 64)
+        self.top_p = top_p  # AvgPool top-p cumulative threshold (default: None, use top_k)
         if threshold is not None:
             self.threshold = torch.ones((32,32)).to("cuda")*threshold
         else:
@@ -428,7 +432,8 @@ def forward_to_save(
                 attn_output = Compass_prefill(query_states, key_states, value_states, lambd=compass_lambd)
             elif self.fastprefillconfig.metric == "avgpool":
                 top_k = self.fastprefillconfig.top_k
-                attn_output = AvgPool_prefill(query_states, key_states, value_states, top_k=top_k)
+                top_p = self.fastprefillconfig.top_p
+                attn_output = AvgPool_prefill(query_states, key_states, value_states, top_k=top_k, top_p=top_p)
         else:
             if key_states.device != query_states.device:
                 key_states = key_states.to(query_states.device)
