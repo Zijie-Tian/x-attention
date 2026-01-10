@@ -8,7 +8,7 @@ set -e
 #############################################
 
 RUN_FULL=true
-RUN_XATTN=true
+RUN_XATTN=false
 RUN_AVGPOOL=false
 
 #############################################

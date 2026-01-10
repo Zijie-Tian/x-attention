@@ -164,8 +164,8 @@ def forward_eval(
         _, _, q_len, _ = query_states.shape
         decoding = (q_len != k_len and q_len == 1)
         if not decoding:
-            key_states = repeat_kv(key_states, self.num_key_value_groups).to("cuda")
-            value_states = repeat_kv(value_states, self.num_key_value_groups).to("cuda")
+            key_states = repeat_kv(key_states, self.num_key_value_groups).to(query_states.device)
+            value_states = repeat_kv(value_states, self.num_key_value_groups).to(query_states.device)
         if self.fastprefillconfig.print_detail:
             torch.cuda.synchronize()
             past_kv_time = time.time() - start_time
@@ -180,7 +180,8 @@ def forward_eval(
                 attn_output = Flexprefill_prefill(query_states.transpose(1, 2), key_states.transpose(1, 2), value_states.transpose(1, 2)).transpose(1, 2)
             elif self.fastprefillconfig.metric == "xattn":
                 if isinstance(self.fastprefillconfig.threshold, torch.Tensor):
-                    attn_output = Xattention_prefill(query_states, key_states, value_states, stride, norm=1, threshold=self.fastprefillconfig.threshold[self.layer_idx], use_triton=True)
+                    threshold = self.fastprefillconfig.threshold[self.layer_idx].to(query_states.device)
+                    attn_output = Xattention_prefill(query_states, key_states, value_states, stride, norm=1, threshold=threshold, use_triton=True)
                 else:
                     attn_output = Xattention_prefill(query_states, key_states, value_states, stride, norm=1, threshold=self.fastprefillconfig.threshold, use_triton=True)
             elif self.fastprefillconfig.metric == "full":
@@ -237,7 +238,7 @@ def forward_eval(
             post_attn_time = time.time() - start_time
             print(f"     Post-attention processing took: {post_attn_time:.6f} seconds")
 
-        return attn_output, None
+        return attn_output, None, past_key_value
 
 
 
@@ -399,8 +400,8 @@ def forward_to_save(
         _, _, q_len, _ = query_states.shape
         decoding = (q_len != k_len and q_len == 1)
         if not decoding:
-            key_states = repeat_kv(key_states, self.num_key_value_groups).to("cuda")
-            value_states = repeat_kv(value_states, self.num_key_value_groups).to("cuda")
+            key_states = repeat_kv(key_states, self.num_key_value_groups).to(query_states.device)
+            value_states = repeat_kv(value_states, self.num_key_value_groups).to(query_states.device)
         if self.fastprefillconfig.print_detail:
             torch.cuda.synchronize()
             past_kv_time = time.time() - start_time
@@ -415,7 +416,8 @@ def forward_to_save(
                 attn_output = Flexprefill_prefill(query_states.transpose(1, 2), key_states.transpose(1, 2), value_states.transpose(1, 2)).transpose(1, 2)
             elif self.fastprefillconfig.metric == "xattn":
                 if isinstance(self.fastprefillconfig.threshold, torch.Tensor):
-                    attn_output = Xattention_prefill(query_states, key_states, value_states, stride, norm=1, threshold=self.fastprefillconfig.threshold[self.layer_idx], use_triton=True)
+                    threshold = self.fastprefillconfig.threshold[self.layer_idx].to(query_states.device)
+                    attn_output = Xattention_prefill(query_states, key_states, value_states, stride, norm=1, threshold=threshold, use_triton=True)
                 else:
                     attn_output = Xattention_prefill(query_states, key_states, value_states, stride, norm=1, threshold=self.fastprefillconfig.threshold, use_triton=True)
             elif self.fastprefillconfig.metric == "full":
@@ -488,7 +490,7 @@ def forward_to_save(
             post_attn_time = time.time() - start_time
             print(f"     Post-attention processing took: {post_attn_time:.6f} seconds")
 
-        return attn_output, None
+        return attn_output, None, past_key_value
 
 def load_fake_model(layer_to_save,target_len,name_or_path=""):
     model = LlamaForCausalLM.from_pretrained(

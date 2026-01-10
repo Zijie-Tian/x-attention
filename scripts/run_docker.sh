@@ -9,7 +9,7 @@ set -e
 # Configuration (same as launch_docker.sh)
 #############################################
 
-IMAGE_NAME="tzj/xattn:v0.3"
+IMAGE_NAME="tzj/xattn:v0.4"
 GPUS="all"
 VISIBLE_GPUS="0"  # Limit container to see only these GPUs (e.g., "0", "0,1", or "" for all)
 MODEL_DIR="/home/zijie/models"

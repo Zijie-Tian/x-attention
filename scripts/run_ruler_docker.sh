@@ -14,8 +14,8 @@ set -e
 #############################################
 
 # Docker settings
-IMAGE_NAME="${IMAGE_NAME:-tzj/xattn:v0.5}"  # v0.6 has fixed transformers/nltk
-GPUS="${GPUS:-device=0}"                    # Use only GPU 0 (A100)
+IMAGE_NAME="${IMAGE_NAME:-tzj/ruler:v0.3}"  # RULER benchmark image with flash-attn + flashinfer
+VISIBLE_GPUS="${VISIBLE_GPUS:-2,3,4,5}"     # Visible GPUs for RULER benchmark
 MODEL_DIR="${MODEL_DIR:-/home/zijie/models}"
 SHM_SIZE="${SHM_SIZE:-16g}"
 
@@ -40,7 +40,8 @@ HOST_GID=$(id -g)
 
 # Build docker command
 DOCKER_CMD="docker run --rm"
-DOCKER_CMD="$DOCKER_CMD --gpus $GPUS"
+DOCKER_CMD="$DOCKER_CMD --gpus all"
+DOCKER_CMD="$DOCKER_CMD -e CUDA_VISIBLE_DEVICES=$VISIBLE_GPUS"
 DOCKER_CMD="$DOCKER_CMD --shm-size=$SHM_SIZE"
 DOCKER_CMD="$DOCKER_CMD --ipc=host"
 DOCKER_CMD="$DOCKER_CMD --ulimit memlock=-1"

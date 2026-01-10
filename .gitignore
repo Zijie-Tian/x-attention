@@ -8,7 +8,7 @@ figures/*/
 
 eval/RULER/docker
 eval/RULER/scripts/benchmark_root
-eval/RULER/scripts/data/synthetic/json/*json
+eval/RULER/scripts/data/
 .ipynb_checkpoints/
 eval/RULER/__pycache__/
 *.jsonl

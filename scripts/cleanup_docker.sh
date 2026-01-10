@@ -1,6 +1,6 @@
 #!/bin/bash
 # Cleanup script for x-attention Docker containers
-# Stops and removes all containers using tzj/xattn images
+# Stops and removes all containers using tzj/xattn and tzj/ruler images
 
 set -e
 
@@ -8,8 +8,8 @@ set -e
 # Configuration
 #############################################
 
-IMAGE_PREFIX="tzj/xattn"  # Prefix for x-attention images (matches tzj/xattn:v0.3, v0.4, etc.)
-FORCE_REMOVE="true"       # Force remove containers (true/false)
+IMAGE_PREFIXES=("tzj/xattn" "tzj/ruler")  # Prefixes for x-attention images
+FORCE_REMOVE="true"                        # Force remove containers (true/false)
 
 #############################################
 # Script logic
@@ -18,16 +18,19 @@ FORCE_REMOVE="true"       # Force remove containers (true/false)
 echo "========================================"
 echo "X-Attention Docker Cleanup"
 echo "========================================"
-echo "Image prefix: $IMAGE_PREFIX"
+echo "Image prefixes: ${IMAGE_PREFIXES[*]}"
 echo "Force remove: $FORCE_REMOVE"
 echo "========================================"
 echo ""
 
-# Find all containers using x-attn images (grep for image prefix)
-CONTAINERS=$(sg docker -c "docker ps -a --format '{{.ID}} {{.Names}} {{.Image}} {{.Status}}'" | grep "$IMAGE_PREFIX" || true)
+# Build grep pattern for all prefixes
+GREP_PATTERN=$(IFS="|"; echo "${IMAGE_PREFIXES[*]}")
+
+# Find all containers using x-attn or ruler images
+CONTAINERS=$(sg docker -c "docker ps -a --format '{{.ID}} {{.Names}} {{.Image}} {{.Status}}'" | grep -E "$GREP_PATTERN" || true)
 
 if [ -z "$CONTAINERS" ]; then
-    echo "No containers found using $IMAGE_PREFIX images."
+    echo "No containers found using these image prefixes."
     exit 0
 fi
 
