@@ -71,8 +71,8 @@ DOCKER_CMD="$DOCKER_CMD -v /etc/group:/etc/group:ro"
 DOCKER_CMD="$DOCKER_CMD -e TORCH_EXTENSIONS_DIR=/workspace/.cache/torch_extensions"
 DOCKER_CMD="$DOCKER_CMD -e TORCHINDUCTOR_CACHE_DIR=/workspace/.cache/torch_inductor"
 DOCKER_CMD="$DOCKER_CMD -e MPLCONFIGDIR=/workspace/.cache/matplotlib"
-# Redirect pip user install to project directory (persists across container runs)
-DOCKER_CMD="$DOCKER_CMD -e PYTHONUSERBASE=/workspace/x-attention/.pip_cache"
+# Use PYTHONPATH to add x-attention to Python path (faster than pip install -e .)
+DOCKER_CMD="$DOCKER_CMD -e PYTHONPATH=/workspace/x-attention"
 
 # Working directory
 DOCKER_CMD="$DOCKER_CMD -w /workspace/x-attention"
@@ -109,9 +109,9 @@ if [ -n "$AVGPOOL_TOPP" ]; then
     RUN_ARGS="$RUN_ARGS --avgpool_topp $AVGPOOL_TOPP"
 fi
 
-# Update MODEL_DIR in run.sh to point to /data/models
 # Download NLTK punkt_tab data if needed, then run RULER
-CONTAINER_CMD="pip install -e . -q --user && python3 -c \"import nltk; nltk.download('punkt_tab', quiet=True)\" && cd eval/RULER/scripts && ./run.sh $RUN_ARGS"
+# Note: xattn package is available via PYTHONPATH (no pip install needed)
+CONTAINER_CMD="python3 -c \"import nltk; nltk.download('punkt_tab', quiet=True)\" && cd eval/RULER/scripts && ./run.sh $RUN_ARGS"
 
 echo "Mode:         Benchmark"
 echo "Model:        $MODEL_NAME"
