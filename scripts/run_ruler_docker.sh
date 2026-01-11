@@ -55,6 +55,7 @@ DOCKER_CMD="$DOCKER_CMD -v $HOME:$HOME"
 # Override ~/.local with empty tmpfs to prevent loading host's old packages
 # DOCKER_CMD="$DOCKER_CMD --tmpfs $HOME/.local:rw,exec,size=100m"
 DOCKER_CMD="$DOCKER_CMD -v $PROJECT_DIR:/workspace/x-attention"
+DOCKER_CMD="$DOCKER_CMD -v /home/zijie/Code/nano-vllm:/workspace/nano-vllm"
 DOCKER_CMD="$DOCKER_CMD -v $MODEL_DIR:/data/models"
 DOCKER_CMD="$DOCKER_CMD -v /etc/passwd:/etc/passwd:ro"
 DOCKER_CMD="$DOCKER_CMD -v /etc/group:/etc/group:ro"
@@ -68,11 +69,13 @@ DOCKER_CMD="$DOCKER_CMD -v /etc/group:/etc/group:ro"
 [[ -n "${NO_PROXY:-}" ]] && DOCKER_CMD="$DOCKER_CMD -e NO_PROXY=$NO_PROXY"
 
 # Environment variables - Use pre-compiled cache from v0.5 image
+# Disable user site-packages to prevent version conflicts with host packages
+DOCKER_CMD="$DOCKER_CMD -e PYTHONNOUSERSITE=1"
 DOCKER_CMD="$DOCKER_CMD -e TORCH_EXTENSIONS_DIR=/workspace/.cache/torch_extensions"
 DOCKER_CMD="$DOCKER_CMD -e TORCHINDUCTOR_CACHE_DIR=/workspace/.cache/torch_inductor"
 DOCKER_CMD="$DOCKER_CMD -e MPLCONFIGDIR=/workspace/.cache/matplotlib"
-# Use PYTHONPATH to add x-attention to Python path (faster than pip install -e .)
-DOCKER_CMD="$DOCKER_CMD -e PYTHONPATH=/workspace/x-attention"
+# Use PYTHONPATH to add packages to Python path (faster than pip install -e .)
+DOCKER_CMD="$DOCKER_CMD -e PYTHONPATH=/workspace/x-attention:/workspace/nano-vllm"
 
 # Working directory
 DOCKER_CMD="$DOCKER_CMD -w /workspace/x-attention"
