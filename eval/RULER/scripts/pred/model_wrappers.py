@@ -128,3 +128,82 @@ class MambaModel:
     def process_batch(self, prompts: List[str], **kwargs) -> List[dict]:
         # FIXME: naive implementation
         return [self.__call__(prompt, **kwargs) for prompt in prompts]
+
+
+class NanoVLLMModel:
+    """
+    NanoVLLM model wrapper for RULER benchmark.
+
+    Uses nano-vllm's lightweight inference engine with CPU offload support
+    for long-context inference on memory-constrained GPUs.
+    """
+    def __init__(self, name_or_path: str, **generation_kwargs) -> None:
+        from nanovllm import LLM, SamplingParams
+        from nanovllm.config import SparsePolicyType
+
+        # Extract nano-vllm specific configuration
+        max_model_len = generation_kwargs.pop('max_model_len', 128 * 1024)
+        enable_cpu_offload = generation_kwargs.pop('enable_cpu_offload', True)
+        num_gpu_blocks = generation_kwargs.pop('num_gpu_blocks', 2)
+        kvcache_block_size = generation_kwargs.pop('kvcache_block_size', 1024)
+        gpu_memory_utilization = generation_kwargs.pop('gpu_memory_utilization', 0.9)
+        enforce_eager = generation_kwargs.pop('enforce_eager', True)
+
+        # Build LLM kwargs
+        llm_kwargs = {
+            "max_model_len": max_model_len,
+            "max_num_batched_tokens": max_model_len,
+            "kvcache_block_size": kvcache_block_size,
+            "gpu_memory_utilization": gpu_memory_utilization,
+            "enforce_eager": enforce_eager,
+            "sparse_policy": SparsePolicyType.FULL,  # Always use full attention for RULER
+        }
+
+        if enable_cpu_offload:
+            llm_kwargs["enable_cpu_offload"] = True
+            llm_kwargs["num_gpu_blocks"] = num_gpu_blocks
+
+        self.llm = LLM(name_or_path, **llm_kwargs)
+        self.tokenizer = self.llm.tokenizer
+
+        # Store generation parameters
+        self.stop = generation_kwargs.pop('stop', [])
+        self.max_new_tokens = generation_kwargs.pop('max_new_tokens', 50)
+        # NanoVLLM doesn't support greedy sampling (temperature=0.0)
+        # Use a very small temperature for near-greedy behavior
+        temp = generation_kwargs.pop('temperature', 0.0)
+        self.temperature = max(temp, 0.01)  # Minimum 0.01 for stability
+
+        # Pad token setup (same as HuggingFaceModel)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.padding_side = 'left'
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+
+    def __call__(self, prompt: str, **kwargs) -> Dict[str, List[str]]:
+        return self.process_batch([prompt], **kwargs)[0]
+
+    def process_batch(self, prompts: List[str], **kwargs) -> List[dict]:
+        from nanovllm import SamplingParams
+
+        sampling_params = SamplingParams(
+            temperature=self.temperature,
+            max_tokens=self.max_new_tokens,
+        )
+
+        # NanoVLLM CPU offload mode only supports single sequence
+        # Process prompts one at a time
+        results = []
+        for prompt in prompts:
+            outputs = self.llm.generate([prompt], sampling_params, use_tqdm=False)
+            output = outputs[0]
+            text = output["text"]
+
+            # Handle stop words
+            if self.stop is not None:
+                for s in self.stop:
+                    text = text.split(s)[0]
+
+            results.append({'text': [text]})
+
+        return results

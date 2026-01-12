@@ -16,10 +16,10 @@ TEMPERATURE="0.0" # greedy
 TOP_P="1.0"
 TOP_K="32"
 SEQ_LENGTHS=(
-    4096
+    # 4096
     # 8192
     # 16384
-    # 32768
+    32768
     # 65536
     # 131072
 )
@@ -34,6 +34,17 @@ MODEL_SELECT() {
             MODEL_PATH="${MODEL_DIR}/Llama-3.1-8B-Instruct"
             MODEL_TEMPLATE_TYPE="meta-llama3"
             MODEL_FRAMEWORK="hf"
+            ;;
+        # NanoVLLM models (with CPU offload support)
+        qwen3-4b-nanovllm)
+            MODEL_PATH="${MODEL_DIR}/Qwen3-4B-Instruct-2507"
+            MODEL_TEMPLATE_TYPE="qwen"
+            MODEL_FRAMEWORK="nanovllm"
+            ;;
+        llama3.1-8b-nanovllm)
+            MODEL_PATH="${MODEL_DIR}/Llama-3.1-8B-Instruct"
+            MODEL_TEMPLATE_TYPE="meta-llama3"
+            MODEL_FRAMEWORK="nanovllm"
             ;;
     esac
 

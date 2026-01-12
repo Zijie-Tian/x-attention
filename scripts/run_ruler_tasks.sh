@@ -7,12 +7,13 @@ set -e
 # Configuration
 #############################################
 
-RUN_FULL=true
+RUN_FULL=false
 RUN_XATTN=false
 RUN_AVGPOOL=false
+RUN_NANOVLLM=true
 
 #############################################
-# Full Attention Tests (Baseline)
+# Full Attention Tests (Baseline - HuggingFace)
 #############################################
 
 if [ "$RUN_FULL" = true ]; then
@@ -55,6 +56,39 @@ if [ "$RUN_AVGPOOL" = true ]; then
     METRIC="avgpool" AVGPOOL_TOPK="" AVGPOOL_TOPP="0.99" ./scripts/run_ruler_docker.sh
 
     echo "=== AvgPool tests completed ==="
+fi
+
+#############################################
+# NanoVLLM Tests (Full Attention via nano-vllm)
+#############################################
+
+if [ "$RUN_NANOVLLM" = true ]; then
+    echo "=== Testing NanoVLLM Full Attention ==="
+
+    # Default: Llama 3.1-8B with GPU-only mode (no CPU offload)
+    # MODEL_NAME="llama3.1-8b-nanovllm" ./scripts/run_ruler_nanovllm.sh
+
+    # With CPU offload enabled (single sequence only, for long context)
+    # NANOVLLM_CPU_OFFLOAD="true" \
+    # NANOVLLM_NUM_GPU_BLOCKS="2" \
+    # NANOVLLM_MAX_MODEL_LEN="131072" \
+    # MODEL_NAME="llama3.1-8b-nanovllm" ./scripts/run_ruler_nanovllm.sh
+
+    # # GPU-only mode with different max lengths
+    # NANOVLLM_MAX_MODEL_LEN="8192" \
+    # MODEL_NAME="llama3.1-8b-nanovllm" ./scripts/run_ruler_nanovllm.sh
+
+    # Uncomment for longer sequences (requires more GPU memory)
+    # NANOVLLM_MAX_MODEL_LEN="16384" \
+    # MODEL_NAME="llama3.1-8b-nanovllm" ./scripts/run_ruler_nanovllm.sh
+
+    # 32K with CPU offload - no OOM with layerwise KV cache offload
+    NANOVLLM_CPU_OFFLOAD="true" \
+    NANOVLLM_NUM_GPU_BLOCKS="4" \
+    NANOVLLM_MAX_MODEL_LEN="131072" \
+    MODEL_NAME="llama3.1-8b-nanovllm" ./scripts/run_ruler_nanovllm.sh
+
+    echo "=== NanoVLLM tests completed ==="
 fi
 
 echo "=== All tests completed ==="

@@ -54,6 +54,7 @@ SERVER_TYPES = (
     'gemini',
     'hf',
     'mamba',
+    'nanovllm',
 )
 
 
@@ -103,7 +104,7 @@ parser.add_argument("--avgpool_topp", type=float, default=None, help="Top-p thre
 
 args = parser.parse_args()
 args.stop_words = list(filter(None, args.stop_words.split(',')))
-if args.server_type == 'hf' or args.server_type == 'gemini':
+if args.server_type in ('hf', 'gemini', 'nanovllm'):
     args.threads = 1
 
 fastprefillconfig = FastPrefillConfig(
@@ -213,7 +214,24 @@ def get_llm(tokens_to_generate):
             stop=args.stop_words,
             max_new_tokens=tokens_to_generate,
         )
-        
+
+    elif args.server_type == 'nanovllm':
+        from model_wrappers import NanoVLLMModel
+        # nano-vllm: lightweight inference with CPU offload support
+        llm = NanoVLLMModel(
+            name_or_path=args.model_name_or_path,
+            temperature=args.temperature,
+            stop=args.stop_words,
+            max_new_tokens=tokens_to_generate,
+            # NanoVLLM specific settings (can be overridden via env vars)
+            max_model_len=int(os.environ.get('NANOVLLM_MAX_MODEL_LEN', 128 * 1024)),
+            enable_cpu_offload=os.environ.get('NANOVLLM_CPU_OFFLOAD', 'true').lower() == 'true',
+            num_gpu_blocks=int(os.environ.get('NANOVLLM_NUM_GPU_BLOCKS', 2)),
+            kvcache_block_size=int(os.environ.get('NANOVLLM_BLOCK_SIZE', 1024)),
+            gpu_memory_utilization=float(os.environ.get('NANOVLLM_GPU_UTIL', 0.9)),
+            enforce_eager=os.environ.get('NANOVLLM_ENFORCE_EAGER', 'true').lower() == 'true',
+        )
+
     else:
         raise RuntimeError(f'Unsupported server type {args.server_type}')
 
